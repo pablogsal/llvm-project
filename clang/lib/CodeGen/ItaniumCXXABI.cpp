@@ -2779,6 +2779,8 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
       guard->setComdat(CGM.getModule().getOrInsertComdat(guard->getName()));
     }
 
+    CGM.maybeSetGnuUniqueObject(guard, &D);
+
     CGM.setStaticLocalDeclGuardAddress(&D, guard);
   }
 
