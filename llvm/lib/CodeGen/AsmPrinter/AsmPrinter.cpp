@@ -837,8 +837,12 @@ void AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
     OutContext.reportError(SMLoc(), "symbol '" + Twine(GVSym->getName()) +
                                         "' is already defined");
 
-  bool EmitGnuUniqueObject =
-      MAI.hasDotTypeDotSizeDirective() && GV->hasMetadata("gnu_unique");
+  bool EmitGnuUniqueObject = TM.getTargetTriple().isOSBinFormatELF() &&
+                             MAI.hasDotTypeDotSizeDirective() &&
+                             GV->hasMetadata("gnu_unique") &&
+                             !GV->hasLocalLinkage() &&
+                             !GV->hasAvailableExternallyLinkage() &&
+                             GV->isWeakForLinker() && GV->hasComdat();
   if (MAI.hasDotTypeDotSizeDirective() && !EmitGnuUniqueObject)
     OutStreamer->emitSymbolAttribute(EmittedSym, MCSA_ELF_TypeObject);
 

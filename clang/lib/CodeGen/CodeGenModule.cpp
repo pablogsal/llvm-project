@@ -6299,8 +6299,13 @@ void CodeGenModule::maybeSetGnuUniqueObject(llvm::GlobalVariable *GV,
   // local statics, and their guard variables. In Clang IR these are VarDecl-
   // backed weak definitions in COMDAT groups. Runtime-generated objects such as
   // vtables and typeinfo do not come through this path.
-  if (!D || !GV || GV->isDeclaration() || GV->hasAvailableExternallyLinkage() ||
+  if (!D || !GV || !getLangOpts().CPlusPlus || D->hasAttr<SelectAnyAttr>() ||
+      GV->isDeclaration() || GV->hasAvailableExternallyLinkage() ||
       !GV->isWeakForLinker() || !GV->hasComdat())
+    return;
+
+  GVALinkage Linkage = getContext().GetGVALinkageForVariable(D);
+  if (Linkage != GVA_DiscardableODR && Linkage != GVA_StrongODR)
     return;
 
   GV->setMetadata("gnu_unique",

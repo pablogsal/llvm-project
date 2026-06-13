@@ -113,11 +113,11 @@ __constant__ int ext_constant_var_def = 2;
 
 #if __cplusplus > 201402L
 // NORDC17: @inline_var = internal global i32 undef, comdat, align 4{{$}}
-// RDC17: @inline_var = linkonce_odr global i32 undef, comdat, align 4{{$}}
+// RDC17: @inline_var = linkonce_odr global i32 undef, comdat, align 4, !gnu_unique !{{[0-9]+}}{{$}}
 // NORDC17-NOT: @inline_var2 =
 // RDC17-NOT: @inline_var2 =
 // NORDC17: @_ZN1C17member_inline_varE = internal constant i32 undef, comdat, align 4{{$}}
-// RDC17: @_ZN1C17member_inline_varE = linkonce_odr constant i32 undef, comdat, align 4{{$}}
+// RDC17: @_ZN1C17member_inline_varE = linkonce_odr constant i32 undef, comdat, align 4, !gnu_unique !{{[0-9]+}}{{$}}
 // Check inline variable ODR-used by host is emitted on host and registered.
 __device__ inline int inline_var = 3;
 // Check inline variable not ODR-used by host is not emitted on host or registered.

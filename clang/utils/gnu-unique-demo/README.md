@@ -29,7 +29,7 @@ The script compiles each testcase four ways:
 
 * GCC default
 * GCC `-fno-gnu-unique`
-* patched Clang `-fgnu-unique`
+* patched Clang default
 * patched Clang `-fno-gnu-unique`
 
 It compares the ELF symbol `Type/Bind/Visibility` triples for:
@@ -43,7 +43,7 @@ It compares the ELF symbol `Type/Bind/Visibility` triples for:
 * dynamically initialized inline-function local statics
 * guard variables for dynamically initialized inline-function local statics
 * negative cases that must stay weak: vtables, typeinfo, and typeinfo names
-* libvtv-shaped hidden weak COMDAT symbols in `.vtable_map_vars`
+* libvtv-shaped hidden GNU-unique symbols in `.vtable_map_vars`
 
 The script also tries an i386 object-only libvtv-shaped comparison, matching
 the 32-bit and 64-bit checked-in GCC libvtv assembly coverage. If the local GCC

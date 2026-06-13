@@ -48,6 +48,8 @@ static void copyLinkageVisibility(Module &M, const GlobalVariable *from,
   to->setLinkage(from->getLinkage());
   to->setVisibility(from->getVisibility());
   to->setDSOLocal(from->isDSOLocal());
+  if (MDNode *GnuUnique = from->getMetadata("gnu_unique"))
+    to->setMetadata("gnu_unique", GnuUnique);
   if (from->hasComdat()) {
     to->setComdat(M.getOrInsertComdat(to->getName()));
     to->getComdat()->setSelectionKind(from->getComdat()->getSelectionKind());

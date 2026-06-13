@@ -1,7 +1,8 @@
 // REQUIRES: x86-registered-target
 
+// RUN: %clang_cc1 -triple x86_64-unknown-linux-gnu -std=c++20 -emit-obj -o - %s | llvm-readelf --file-header --symbols - | FileCheck %s --check-prefix=GNU
 // RUN: %clang_cc1 -triple x86_64-unknown-linux-gnu -std=c++20 -fgnu-unique -emit-obj -o - %s | llvm-readelf --file-header --symbols - | FileCheck %s --check-prefix=GNU
-// RUN: %clang_cc1 -triple x86_64-unknown-linux-gnu -std=c++20 -fno-gnu-unique -emit-obj -o - %s | llvm-readelf --file-header --symbols - | FileCheck %s --check-prefix=NOGNU
+// RUN: %clang_cc1 -triple x86_64-unknown-linux-gnu -std=c++20 -fno-gnu-unique -emit-obj -o - %s | llvm-readelf --file-header --symbols - | FileCheck %s --check-prefix=NOGNU --implicit-check-not=UNIQUE
 
 template <class T> struct Holder {
   static int value;
@@ -39,10 +40,14 @@ struct HasVTable {
   virtual void f() {}
 };
 
+__attribute__((selectany)) int selectany_global = 5;
+__attribute__((weak)) int weak_plain = 6;
+
 int use() {
   HasVTable h;
   return Holder<int>::value + Holder<int>::constant + Holder<int>::tls +
-         DynamicHolder<int>::value + local_static() + dynamic_static();
+         DynamicHolder<int>::value + local_static() + dynamic_static() +
+         selectany_global + weak_plain;
 }
 
 // GNU: OS/ABI: UNIX - GNU
@@ -57,6 +62,8 @@ int use() {
 // GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZTV9HasVTable
 // GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZTI9HasVTable
 // GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZTS9HasVTable
+// GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} selectany_global
+// GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} weak_plain
 
 // NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZN6HolderIiE5valueE
 // NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZN6HolderIiE8constantE
@@ -66,3 +73,5 @@ int use() {
 // NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZZ12local_staticvE1x
 // NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZZ14dynamic_staticvE1y
 // NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGVZ14dynamic_staticvE1y
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} selectany_global
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} weak_plain

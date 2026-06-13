@@ -38,10 +38,10 @@ require_file "$READELF"
 compile_matrix() {
   local src=$1
   local stem=$2
-  "$GXX" "$CXXSTD" -c "$src" -o "$TMPDIR/$stem-gcc-gnu.o"
+  "$GXX" "$CXXSTD" -c "$src" -o "$TMPDIR/$stem-gcc-default.o"
   "$GXX" "$CXXSTD" -fno-gnu-unique -c "$src" -o "$TMPDIR/$stem-gcc-nognu.o"
-  "$CLANG" -target "$TARGET" "$CXXSTD" -fgnu-unique -c "$src" \
-    -o "$TMPDIR/$stem-clang-gnu.o"
+  "$CLANG" -target "$TARGET" "$CXXSTD" -c "$src" \
+    -o "$TMPDIR/$stem-clang-default.o"
   "$CLANG" -target "$TARGET" "$CXXSTD" -fno-gnu-unique -c "$src" \
     -o "$TMPDIR/$stem-clang-nognu.o"
 }
@@ -74,7 +74,7 @@ compare_symbols() {
 
   echo
   echo "$title"
-  printf '| Case | Symbol | GCC default | Clang -fgnu-unique | Match | GCC -fno | Clang -fno | Match |\n'
+  printf '| Case | Symbol | GCC default | Clang default | Match | GCC -fno | Clang -fno | Match |\n'
   printf '|---|---|---:|---:|:---:|---:|---:|:---:|\n'
 
   while (($#)); do
@@ -82,28 +82,28 @@ compare_symbols() {
     local sym=$2
     shift 2
 
-    local gcc_gnu clang_gnu gcc_nognu clang_nognu match_gnu match_nognu
-    gcc_gnu=$(lookup_symbol "$TMPDIR/$stem-gcc-gnu.o" "$sym")
-    clang_gnu=$(lookup_symbol "$TMPDIR/$stem-clang-gnu.o" "$sym")
+    local gcc_default clang_default gcc_nognu clang_nognu match_default match_nognu
+    gcc_default=$(lookup_symbol "$TMPDIR/$stem-gcc-default.o" "$sym")
+    clang_default=$(lookup_symbol "$TMPDIR/$stem-clang-default.o" "$sym")
     gcc_nognu=$(lookup_symbol "$TMPDIR/$stem-gcc-nognu.o" "$sym")
     clang_nognu=$(lookup_symbol "$TMPDIR/$stem-clang-nognu.o" "$sym")
 
-    match_gnu=NO
-    if [[ "$gcc_gnu" == "$clang_gnu" ]]; then
-      match_gnu=YES
+    match_default=NO
+    if [[ "$gcc_default" == "$clang_default" ]]; then
+      match_default=YES
     else
-      ((failures++))
+      ((++failures))
     fi
 
     match_nognu=NO
     if [[ "$gcc_nognu" == "$clang_nognu" ]]; then
       match_nognu=YES
     else
-      ((failures++))
+      ((++failures))
     fi
 
     printf '| %s | `%s` | `%s` | `%s` | %s | `%s` | `%s` | %s |\n' \
-      "$desc" "$sym" "$gcc_gnu" "$clang_gnu" "$match_gnu" \
+      "$desc" "$sym" "$gcc_default" "$clang_default" "$match_default" \
       "$gcc_nognu" "$clang_nognu" "$match_nognu"
   done
 }
@@ -112,7 +112,7 @@ compile_vtv_i386_if_available() {
   local src=$1
   local stem=vtv-i386
 
-  if ! "$GXX" "$CXXSTD" -m32 -c "$src" -o "$TMPDIR/$stem-gcc-gnu.o" \
+  if ! "$GXX" "$CXXSTD" -m32 -c "$src" -o "$TMPDIR/$stem-gcc-default.o" \
       >/dev/null 2>&1; then
     echo
     echo "i386 libvtv-shaped demo skipped: $GXX -m32 failed"
@@ -121,12 +121,12 @@ compile_vtv_i386_if_available() {
 
   "$GXX" "$CXXSTD" -m32 -fno-gnu-unique -c "$src" \
     -o "$TMPDIR/$stem-gcc-nognu.o"
-  "$CLANG" -target i386-unknown-linux-gnu "$CXXSTD" -fgnu-unique -c "$src" \
-    -o "$TMPDIR/$stem-clang-gnu.o"
+  "$CLANG" -target i386-unknown-linux-gnu "$CXXSTD" -c "$src" \
+    -o "$TMPDIR/$stem-clang-default.o"
   "$CLANG" -target i386-unknown-linux-gnu "$CXXSTD" -fno-gnu-unique -c "$src" \
     -o "$TMPDIR/$stem-clang-nognu.o"
 
-  compare_symbols "$stem" "libvtv-shaped hidden COMDAT map symbols (i386)" \
+  compare_symbols "$stem" "libvtv-shaped hidden map symbols in .vtable_map_vars (i386)" \
     "hidden vtable map static" '_ZN3VTVI11EnvironmentE12__vtable_mapE' \
     "hidden vtable map static" '_ZN3VTVI15EnvironmentImplE12__vtable_mapE'
 }
@@ -139,9 +139,9 @@ compile_matrix "$SCRIPT_DIR/cases.cpp" cases
 compile_matrix "$SCRIPT_DIR/vtv-map.cpp" vtv
 
 echo
-echo "OSABI"
-print_osabi "GCC default" "$TMPDIR/cases-gcc-gnu.o"
-print_osabi "Clang enabled" "$TMPDIR/cases-clang-gnu.o"
+echo "OSABI (informational)"
+print_osabi "GCC default" "$TMPDIR/cases-gcc-default.o"
+print_osabi "Clang default" "$TMPDIR/cases-clang-default.o"
 print_osabi "GCC -fno" "$TMPDIR/cases-gcc-nognu.o"
 print_osabi "Clang -fno" "$TMPDIR/cases-clang-nognu.o"
 
@@ -158,7 +158,7 @@ compare_symbols cases "C++ vague-linkage cases" \
   "typeinfo negative case" '_ZTI9HasVTable' \
   "typeinfo name negative case" '_ZTS9HasVTable'
 
-compare_symbols vtv "libvtv-shaped hidden COMDAT map symbols (x86_64)" \
+compare_symbols vtv "libvtv-shaped hidden map symbols in .vtable_map_vars (x86_64)" \
   "hidden vtable map static" '_ZN3VTVI11EnvironmentE12__vtable_mapE' \
   "hidden vtable map static" '_ZN3VTVI15EnvironmentImplE12__vtable_mapE'
 
@@ -170,4 +170,4 @@ if ((failures)); then
   exit 1
 fi
 
-echo "PASS: patched Clang matches GCC symbol Type/Bind/Visibility for all demo cases"
+echo "PASS: patched Clang default matches GCC symbol Type/Bind/Visibility for all demo cases"

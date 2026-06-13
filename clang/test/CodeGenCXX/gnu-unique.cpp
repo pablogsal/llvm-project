@@ -1,5 +1,6 @@
+// RUN: %clang_cc1 -triple x86_64-unknown-linux-gnu -std=c++20 -emit-llvm -o - %s | FileCheck %s --check-prefix=GNU
 // RUN: %clang_cc1 -triple x86_64-unknown-linux-gnu -std=c++20 -fgnu-unique -emit-llvm -o - %s | FileCheck %s --check-prefix=GNU
-// RUN: %clang_cc1 -triple x86_64-unknown-linux-gnu -std=c++20 -fno-gnu-unique -emit-llvm -o - %s | FileCheck %s --check-prefix=NOGNU
+// RUN: %clang_cc1 -triple x86_64-unknown-linux-gnu -std=c++20 -fno-gnu-unique -emit-llvm -o - %s | FileCheck %s --check-prefix=NOGNU --implicit-check-not=!gnu_unique
 
 template <class T> struct Holder {
   static int value;
@@ -37,10 +38,14 @@ struct HasVTable {
   virtual void f() {}
 };
 
+__attribute__((selectany)) int selectany_global = 5;
+__attribute__((weak)) int weak_plain = 6;
+
 int use() {
   HasVTable h;
   return Holder<int>::value + Holder<int>::constant + Holder<int>::tls +
-         DynamicHolder<int>::value + local_static() + dynamic_static();
+         DynamicHolder<int>::value + local_static() + dynamic_static() +
+         selectany_global + weak_plain;
 }
 
 // GNU-DAG: @_ZN6HolderIiE5valueE = weak_odr {{.*}}global i32 1, comdat, align 4, !gnu_unique
@@ -52,6 +57,8 @@ int use() {
 // GNU-DAG: @_ZZ14dynamic_staticvE1y = linkonce_odr {{.*}}global i32 0, comdat, align 4, !gnu_unique
 // GNU-DAG: @_ZGVZ14dynamic_staticvE1y = linkonce_odr {{.*}}global i64 0, comdat, align 8, !gnu_unique
 // GNU-DAG: @_ZTV9HasVTable = linkonce_odr {{.*}}constant {{.*}}, comdat, align 8{{$}}
+// GNU-DAG: @selectany_global = weak_odr {{.*}}global i32 5, comdat, align 4{{$}}
+// GNU-DAG: @weak_plain = weak global i32 6, align 4{{$}}
 
 // NOGNU-DAG: @_ZN6HolderIiE5valueE = weak_odr {{.*}}global i32 1, comdat, align 4{{$}}
 // NOGNU-DAG: @_ZN6HolderIiE8constantE = weak_odr {{.*}}constant i32 2, comdat, align 4{{$}}
@@ -61,3 +68,5 @@ int use() {
 // NOGNU-DAG: @_ZZ12local_staticvE1x = linkonce_odr {{.*}}global i32 4, comdat, align 4{{$}}
 // NOGNU-DAG: @_ZZ14dynamic_staticvE1y = linkonce_odr {{.*}}global i32 0, comdat, align 4{{$}}
 // NOGNU-DAG: @_ZGVZ14dynamic_staticvE1y = linkonce_odr {{.*}}global i64 0, comdat, align 8{{$}}
+// NOGNU-DAG: @selectany_global = weak_odr {{.*}}global i32 5, comdat, align 4{{$}}
+// NOGNU-DAG: @weak_plain = weak global i32 6, align 4{{$}}
