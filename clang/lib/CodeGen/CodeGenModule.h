@@ -47,6 +47,7 @@ class Module;
 class Constant;
 class ConstantInt;
 class Function;
+class GlobalVariable;
 class GlobalValue;
 class DataLayout;
 class FunctionType;
@@ -902,6 +903,8 @@ public:
   const llvm::Triple &getTriple() const { return Target.getTriple(); }
   bool supportsCOMDAT() const;
   void maybeSetTrivialComdat(const Decl &D, llvm::GlobalObject &GO);
+  void maybeSetGnuUniqueObject(llvm::GlobalVariable *GV,
+                               const VarDecl *D) const;
 
   const ABIInfo &getABIInfo();
 

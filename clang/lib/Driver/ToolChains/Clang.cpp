@@ -7603,6 +7603,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   Args.addOptInFlag(CmdArgs, options::OPT_fgnu89_inline,
                     options::OPT_fno_gnu89_inline);
+  Args.addOptInFlag(CmdArgs, options::OPT_fgnu_unique,
+                    options::OPT_fno_gnu_unique);
 
   const Arg *InlineArg = Args.getLastArg(options::OPT_finline_functions,
                                          options::OPT_finline_hint_functions,
