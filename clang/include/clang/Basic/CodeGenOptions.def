@@ -100,6 +100,7 @@ CODEGENOPT(OutputAsmVariant, 2, 3) ///< Set the asm variant for output (3: unspe
 CODEGENOPT(ForbidGuardVariables , 1, 0) ///< Issue errors if C++ guard variables
                                         ///< are required.
 CODEGENOPT(FunctionSections  , 1, 0) ///< Set when -ffunction-sections is enabled.
+CODEGENOPT(GnuUnique         , 1, 0) ///< Set when -fgnu-unique is enabled.
 CODEGENOPT(BBAddrMap  , 1, 0) ///< Set when -fbasic-block-address-map is enabled.
 CODEGENOPT(InstrumentFunctions , 1, 0) ///< Set when -finstrument-functions is
                                        ///< enabled.

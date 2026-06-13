@@ -451,6 +451,8 @@ void CodeGenFunction::EmitStaticVarDecl(const VarDecl &D,
   if (CGM.getCodeGenOpts().KeepPersistentStorageVariables)
     CGM.addUsedOrCompilerUsedGlobal(var);
 
+  CGM.maybeSetGnuUniqueObject(var, &D);
+
   // We may have to cast the constant because of the initializer
   // mismatch above.
   //

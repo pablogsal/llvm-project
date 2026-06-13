@@ -2830,6 +2830,12 @@ defm gnu89_inline : BoolFOption<"gnu89-inline",
   NegFlag<SetFalse>>, ShouldParseIf<!strconcat("!", cplusplus.KeyPath)>;
 def fgnu_runtime : Flag<["-"], "fgnu-runtime">, Group<f_Group>,
   HelpText<"Generate output compatible with the standard GNU Objective-C runtime">;
+defm gnu_unique : BoolFOption<"gnu-unique",
+  CodeGenOpts<"GnuUnique">, DefaultFalse,
+  PosFlag<SetTrue, [], [ClangOption, CC1Option],
+          "Use STB_GNU_UNIQUE binding for eligible vague-linkage C++ objects">,
+  NegFlag<SetFalse, [], [ClangOption, CC1Option],
+          "Do not use STB_GNU_UNIQUE binding for C++ objects">>;
 // This used to be a standalone flag but is now mapped to
 // -Wno-error=invalid-gnu-asm-cast, which is the only thing the flag used to
 // control.
