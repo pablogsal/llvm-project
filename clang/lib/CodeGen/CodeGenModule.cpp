@@ -55,6 +55,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/ProfileSummary.h"
 #include "llvm/ProfileData/InstrProfReader.h"
@@ -4658,6 +4659,23 @@ void CodeGenModule::maybeSetTrivialComdat(const Decl &D,
   GO.setComdat(TheModule.getOrInsertComdat(GO.getName()));
 }
 
+void CodeGenModule::maybeSetGnuUniqueObject(llvm::GlobalVariable *GV,
+                                            const VarDecl *D) const {
+  if (!CodeGenOpts.GnuUnique || !getTriple().isOSBinFormatELF())
+    return;
+
+  // GCC uses STB_GNU_UNIQUE for template static data members, inline-function
+  // local statics, and their guard variables. In Clang IR these are VarDecl-
+  // backed weak definitions in COMDAT groups. Runtime-generated objects such as
+  // vtables and typeinfo do not come through this path.
+  if (!D || !GV || GV->isDeclaration() || GV->hasAvailableExternallyLinkage() ||
+      !GV->isWeakForLinker() || !GV->hasComdat())
+    return;
+
+  GV->setMetadata("gnu_unique",
+                  llvm::MDNode::get(TheModule.getContext(), {}));
+}
+
 /// Pass IsTentative as true if you want to create a tentative definition.
 void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
                                             bool IsTentative) {
@@ -4892,6 +4910,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
   }
 
   maybeSetTrivialComdat(*D, *GV);
+  maybeSetGnuUniqueObject(GV, D);
 
   // Emit the initializer function if necessary.
   if (NeedsGlobalCtor || NeedsGlobalDtor)

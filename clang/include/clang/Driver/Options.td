@@ -1976,6 +1976,12 @@ defm gnu89_inline : BoolFOption<"gnu89-inline",
   NegFlag<SetFalse>>, ShouldParseIf<!strconcat("!", cplusplus.KeyPath)>;
 def fgnu_runtime : Flag<["-"], "fgnu-runtime">, Group<f_Group>,
   HelpText<"Generate output compatible with the standard GNU Objective-C runtime">;
+defm gnu_unique : BoolFOption<"gnu-unique",
+  CodeGenOpts<"GnuUnique">, DefaultFalse,
+  PosFlag<SetTrue, [CC1Option],
+          "Use STB_GNU_UNIQUE binding for eligible vague-linkage C++ objects">,
+  NegFlag<SetFalse, [CC1Option],
+          "Do not use STB_GNU_UNIQUE binding for C++ objects">>;
 def fheinous_gnu_extensions : Flag<["-"], "fheinous-gnu-extensions">, Flags<[CC1Option]>,
   MarshallingInfoFlag<LangOpts<"HeinousExtensions">>;
 def filelist : Separate<["-"], "filelist">, Flags<[LinkerInput]>,

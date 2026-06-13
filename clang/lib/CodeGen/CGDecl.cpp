@@ -463,6 +463,8 @@ void CodeGenFunction::EmitStaticVarDecl(const VarDecl &D,
   else if (D.hasAttr<UsedAttr>())
     CGM.addUsedOrCompilerUsedGlobal(var);
 
+  CGM.maybeSetGnuUniqueObject(var, &D);
+
   // We may have to cast the constant because of the initializer
   // mismatch above.
   //
