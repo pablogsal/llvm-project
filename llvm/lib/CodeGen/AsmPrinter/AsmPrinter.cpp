@@ -771,7 +771,9 @@ void AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
     OutContext.reportError(SMLoc(), "symbol '" + Twine(GVSym->getName()) +
                                         "' is already defined");
 
-  if (MAI->hasDotTypeDotSizeDirective())
+  bool EmitGnuUniqueObject =
+      MAI->hasDotTypeDotSizeDirective() && GV->hasMetadata("gnu_unique");
+  if (MAI->hasDotTypeDotSizeDirective() && !EmitGnuUniqueObject)
     OutStreamer->emitSymbolAttribute(EmittedSym, MCSA_ELF_TypeObject);
 
   SectionKind GVKind = TargetLoweringObjectFile::getKindForGlobal(GV, TM);
@@ -897,6 +899,8 @@ void AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
   OutStreamer->switchSection(TheSection);
 
   emitLinkage(GV, EmittedInitSym);
+  if (EmitGnuUniqueObject)
+    OutStreamer->emitSymbolAttribute(EmittedSym, MCSA_ELF_TypeGnuUniqueObject);
   emitAlignment(Alignment, GV);
 
   OutStreamer->emitLabel(EmittedInitSym);
