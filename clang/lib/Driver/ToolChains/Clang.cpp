@@ -6185,6 +6185,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasFlag(options::OPT_fgnu89_inline, options::OPT_fno_gnu89_inline,
                    false))
     CmdArgs.push_back("-fgnu89-inline");
+  if (Args.hasFlag(options::OPT_fgnu_unique, options::OPT_fno_gnu_unique,
+                   false))
+    CmdArgs.push_back("-fgnu-unique");
 
   if (Args.hasArg(options::OPT_fno_inline))
     CmdArgs.push_back("-fno-inline");
