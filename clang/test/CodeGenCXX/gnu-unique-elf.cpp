@@ -1,49 +1,8 @@
 // REQUIRES: x86-registered-target
 
-// RUN: %clang_cc1 -triple x86_64-unknown-linux-gnu -std=c++20 -fgnu-unique -emit-obj -o - %s | llvm-readelf --file-header --symbols - | FileCheck %s --check-prefix=GNU
-// RUN: %clang_cc1 -triple x86_64-unknown-linux-gnu -std=c++20 -fno-gnu-unique -emit-obj -o - %s | llvm-readelf --file-header --symbols - | FileCheck %s --check-prefix=NOGNU
-
-template <class T> struct Holder {
-  static int value;
-  static const int constant;
-  static thread_local int tls;
-};
-
-template <class T> int Holder<T>::value = 1;
-template <class T> const int Holder<T>::constant = 2;
-template <class T> thread_local int Holder<T>::tls = 3;
-
-template struct Holder<int>;
-
-int side();
-
-template <class T> struct DynamicHolder {
-  static int value;
-};
-
-template <class T> int DynamicHolder<T>::value = side();
-
-template struct DynamicHolder<int>;
-
-inline int &local_static() {
-  static int x = 4;
-  return x;
-}
-
-inline int dynamic_static() {
-  static int y = side();
-  return y;
-}
-
-struct HasVTable {
-  virtual void f() {}
-};
-
-int use() {
-  HasVTable h;
-  return Holder<int>::value + Holder<int>::constant + Holder<int>::tls +
-         DynamicHolder<int>::value + local_static() + dynamic_static();
-}
+// Keep the declarations in gnu-unique.cpp so the IR metadata and ELF binding
+// checks cover the same source cases.
+// RUN: %clang_cc1 -triple x86_64-unknown-linux-gnu -std=c++20 -fno-gnu-unique -emit-obj -o - %S/gnu-unique.cpp | llvm-readelf --file-header --symbols - | FileCheck %s --check-prefix=NOGNU --implicit-check-not=UNIQUE
 
 // GNU: OS/ABI: UNIX - GNU
 // GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZN6HolderIiE5valueE
@@ -54,9 +13,59 @@ int use() {
 // GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZZ12local_staticvE1x
 // GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZZ14dynamic_staticvE1y
 // GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGVZ14dynamic_staticvE1y
+// GNU-DAG: TLS     UNIQUE DEFAULT {{.*}} ref_temp_tls
+// GNU-DAG: TLS     UNIQUE DEFAULT {{.*}} _ZGV12ref_temp_tls
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _Z21ref_temp_var_templateIiE
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZZ14ref_temp_localvE5local
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} ref_temp_dynamic_scalar
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGV23ref_temp_dynamic_scalar
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} ref_temp_dynamic_array
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGV22ref_temp_dynamic_array
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} ref_temp_dynamic_list
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGV21ref_temp_dynamic_list
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} ref_temp_const_list
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} ref_temp_constexpr_dtor_array
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGV29ref_temp_constexpr_dtor_array
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} ref_temp_constexpr_dtor_list
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGV28ref_temp_constexpr_dtor_list
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} ref_temp_comma_scalar
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGV21ref_temp_comma_scalar
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} ref_temp_comma_const_object
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGV27ref_temp_comma_const_object
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} ref_temp_ice_scalar
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGV19ref_temp_ice_scalar
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} ref_temp_ice_const_object
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGV25ref_temp_ice_const_object
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR15ref_temp_object_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR23ref_temp_dynamic_scalar_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR22ref_temp_dynamic_array_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR21ref_temp_dynamic_list_
+// GNU-DAG: TLS     UNIQUE DEFAULT {{.*}} _ZGR12ref_temp_tls_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR21ref_temp_var_templateIiE_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGRN13RefTempHolder6memberE_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGRZ14ref_temp_localvE5local_
+// GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR21ref_temp_const_scalar_
+// GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR20ref_temp_const_array_
+// GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR26ref_temp_const_class_array_
+// GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR19ref_temp_const_list_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR24ref_temp_volatile_scalar_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR23ref_temp_volatile_array_
+// GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR30ref_temp_explicit_const_object_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR22ref_temp_nonconst_call_
+// GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR19ref_temp_const_call_
+// GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR29ref_temp_constexpr_dtor_array_
+// GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR28ref_temp_constexpr_dtor_list_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR24ref_temp_volatile_object_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR23ref_temp_mutable_object_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR21ref_temp_comma_scalar_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR27ref_temp_comma_const_object_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR19ref_temp_ice_scalar_
+// GNU-DAG: OBJECT  UNIQUE DEFAULT {{.*}} _ZGR25ref_temp_ice_const_object_
 // GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZTV9HasVTable
 // GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZTI9HasVTable
 // GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZTS9HasVTable
+// GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} selectany_global
+// GNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} weak_plain
 
 // NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZN6HolderIiE5valueE
 // NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZN6HolderIiE8constantE
@@ -66,3 +75,53 @@ int use() {
 // NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZZ12local_staticvE1x
 // NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZZ14dynamic_staticvE1y
 // NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGVZ14dynamic_staticvE1y
+// NOGNU-DAG: TLS     WEAK   DEFAULT {{.*}} ref_temp_tls
+// NOGNU-DAG: TLS     WEAK   DEFAULT {{.*}} _ZGV12ref_temp_tls
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _Z21ref_temp_var_templateIiE
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZZ14ref_temp_localvE5local
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} ref_temp_dynamic_scalar
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGV23ref_temp_dynamic_scalar
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} ref_temp_dynamic_array
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGV22ref_temp_dynamic_array
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} ref_temp_dynamic_list
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGV21ref_temp_dynamic_list
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} ref_temp_const_list
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} ref_temp_constexpr_dtor_array
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGV29ref_temp_constexpr_dtor_array
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} ref_temp_constexpr_dtor_list
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGV28ref_temp_constexpr_dtor_list
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} ref_temp_comma_scalar
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGV21ref_temp_comma_scalar
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} ref_temp_comma_const_object
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGV27ref_temp_comma_const_object
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} ref_temp_ice_scalar
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGV19ref_temp_ice_scalar
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} ref_temp_ice_const_object
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGV25ref_temp_ice_const_object
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR15ref_temp_object_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR23ref_temp_dynamic_scalar_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR22ref_temp_dynamic_array_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR21ref_temp_dynamic_list_
+// NOGNU-DAG: TLS     WEAK   DEFAULT {{.*}} _ZGR12ref_temp_tls_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR21ref_temp_var_templateIiE_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGRN13RefTempHolder6memberE_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGRZ14ref_temp_localvE5local_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR21ref_temp_const_scalar_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR20ref_temp_const_array_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR26ref_temp_const_class_array_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR19ref_temp_const_list_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR24ref_temp_volatile_scalar_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR23ref_temp_volatile_array_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR30ref_temp_explicit_const_object_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR22ref_temp_nonconst_call_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR19ref_temp_const_call_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR29ref_temp_constexpr_dtor_array_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR28ref_temp_constexpr_dtor_list_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR24ref_temp_volatile_object_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR23ref_temp_mutable_object_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR21ref_temp_comma_scalar_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR27ref_temp_comma_const_object_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR19ref_temp_ice_scalar_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} _ZGR25ref_temp_ice_const_object_
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} selectany_global
+// NOGNU-DAG: OBJECT  WEAK   DEFAULT {{.*}} weak_plain
