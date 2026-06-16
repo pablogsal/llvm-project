@@ -6254,7 +6254,7 @@ void CodeGenModule::MaybeHandleStaticInExternC(const SomeDecl *D,
     R.first->second = nullptr;
 }
 
-static bool shouldBeInCOMDAT(CodeGenModule &CGM, const Decl &D) {
+static bool shouldBeInCOMDAT(const CodeGenModule &CGM, const Decl &D) {
   if (!CGM.supportsCOMDAT())
     return false;
 
@@ -6290,26 +6290,103 @@ void CodeGenModule::maybeSetTrivialComdat(const Decl &D,
   GO.setComdat(TheModule.getOrInsertComdat(GO.getName()));
 }
 
-void CodeGenModule::maybeSetGnuUniqueObject(llvm::GlobalVariable *GV,
-                                            const VarDecl *D) const {
-  if (!CodeGenOpts.GnuUnique || !getTriple().isOSBinFormatELF())
-    return;
+static bool shouldSetGnuUniqueObject(const CodeGenModule &CGM,
+                                     llvm::GlobalVariable *GV,
+                                     const VarDecl *D) {
+  if (!CGM.getCodeGenOpts().GnuUnique ||
+      !CGM.getTriple().isOSBinFormatELF())
+    return false;
 
   // GCC uses STB_GNU_UNIQUE for template static data members, inline-function
   // local statics, and their guard variables. In Clang IR these are VarDecl-
   // backed weak definitions in COMDAT groups. Runtime-generated objects such as
   // vtables and typeinfo do not come through this path.
-  if (!D || !GV || !getLangOpts().CPlusPlus || D->hasAttr<SelectAnyAttr>() ||
-      GV->isDeclaration() || GV->hasAvailableExternallyLinkage() ||
-      !GV->isWeakForLinker() || !GV->hasComdat())
+  if (!D || !GV || !CGM.getLangOpts().CPlusPlus ||
+      D->hasAttr<SelectAnyAttr>() ||
+      GV->hasAvailableExternallyLinkage() || !GV->isWeakForLinker() ||
+      !GV->hasComdat())
+    return false;
+
+  if (!shouldBeInCOMDAT(CGM, *D))
+    return false;
+
+  return true;
+}
+
+static void setGnuUniqueObjectMetadata(llvm::GlobalVariable *GV) {
+  GV->setMetadata("gnu_unique", llvm::MDNode::get(GV->getContext(), {}));
+}
+
+void CodeGenModule::maybeSetGnuUniqueObject(llvm::GlobalVariable *GV,
+                                            const VarDecl *D) const {
+  if (!GV || GV->isDeclaration())
     return;
 
-  GVALinkage Linkage = getContext().GetGVALinkageForVariable(D);
-  if (Linkage != GVA_DiscardableODR && Linkage != GVA_StrongODR)
+  if (!shouldSetGnuUniqueObject(*this, GV, D))
     return;
 
-  GV->setMetadata("gnu_unique",
-                  llvm::MDNode::get(TheModule.getContext(), {}));
+  setGnuUniqueObjectMetadata(GV);
+}
+
+static QualType getGnuUniqueReferenceTemporaryType(const ASTContext &Context,
+                                                   const Expr *Temporary) {
+  const Expr *E = Temporary->IgnoreParens();
+
+  while (const auto *Cast = dyn_cast<ImplicitCastExpr>(E)) {
+    if (Cast->getCastKind() != CK_NoOp)
+      break;
+
+    QualType SourceType = Cast->getSubExpr()->getType();
+    QualType CastType = Cast->getType();
+    if (!SourceType->isRecordType() ||
+        !Context.hasSameUnqualifiedType(SourceType, CastType))
+      break;
+
+    E = Cast->getSubExpr()->IgnoreParens();
+  }
+
+  return E->getType();
+}
+
+static bool shouldSetGnuUniqueObjectForReferenceTemporary(
+    const ASTContext &Context, const VarDecl *D, const Expr *Temporary) {
+  // GCC gives lifetime-extended reference temporaries the linkage of the
+  // extending declaration, then lets its ELF object emission rule exclude
+  // read-only artificial decls from STB_GNU_UNIQUE. Its reference-temporary
+  // readonly rule requires a constant initializer, a literal type, const
+  // non-volatile storage, and no mutable fields.
+  QualType TemporaryType =
+      getGnuUniqueReferenceTemporaryType(Context, Temporary);
+  QualType BaseElementType = Context.getBaseElementType(TemporaryType);
+  if (!BaseElementType.isConstQualified() ||
+      BaseElementType.isVolatileQualified())
+    return true;
+
+  if (!TemporaryType->isLiteralType(Context))
+    return true;
+
+  if (const auto *RD = BaseElementType->getAsCXXRecordDecl())
+    if (RD->hasMutableFields())
+      return true;
+
+  if (D->hasConstantInitialization())
+    return false;
+
+  Expr::EvalResult ConstantEvalResult;
+  return !Temporary->EvaluateAsConstantExpr(ConstantEvalResult, Context);
+}
+
+static void maybeSetGnuUniqueObjectForReferenceTemporary(
+    const CodeGenModule &CGM, llvm::GlobalVariable *GV, const VarDecl *D,
+    const Expr *Temporary) {
+  if (!shouldSetGnuUniqueObject(CGM, GV, D))
+    return;
+
+  if (!shouldSetGnuUniqueObjectForReferenceTemporary(
+          CGM.getContext(), D, Temporary))
+    return;
+
+  setGnuUniqueObjectMetadata(GV);
 }
 
 const ABIInfo &CodeGenModule::getABIInfo() {
@@ -7633,8 +7710,12 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
   getCXXABI().getMangleContext().mangleReferenceTemporary(
       VD, E->getManglingNumber(), Out);
 
+  APValue *ExtendingDeclValue = nullptr;
+  if (E->getStorageDuration() == SD_Static)
+    ExtendingDeclValue = VD->evaluateValue();
+
   APValue *Value = nullptr;
-  if (E->getStorageDuration() == SD_Static && VD->evaluateValue()) {
+  if (ExtendingDeclValue) {
     // If the initializer of the extending declaration is a constant
     // initializer, we should have a cached constant initializer for this
     // temporary. Note that this might have a different value from the value
@@ -7700,6 +7781,7 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
   GV->setAlignment(Align.getAsAlign());
   if (supportsCOMDAT() && GV->isWeakForLinker())
     GV->setComdat(TheModule.getOrInsertComdat(GV->getName()));
+  maybeSetGnuUniqueObjectForReferenceTemporary(*this, GV, VD, E->getSubExpr());
   if (VD->getTLSKind())
     setTLSMode(GV, *VD);
   llvm::Constant *CV = GV;
